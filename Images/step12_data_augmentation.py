@@ -1,6 +1,7 @@
 import os
 import csv
 
+import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import (
@@ -305,18 +306,25 @@ def build_val_transform(
 class LesionDataset(Dataset):
     def __init__(
         self,
-        split: str = "train",
+        fold: int = 0,
+        role: str = "train",
         transform=None,
         include_task2: bool = True,
+        fold_column: str = "fold",
     ) -> None:
         """
-        Load Task 1 lesion masks and optionally Task 2 masks.
+        Load Task 1 lesion masks and optionally Task 2 masks,
+        selecting samples by cross-validation fold.
 
         Parameters
         ----------
-        split:
-            Either "train" or "val". The corresponding image IDs
-            are read from splits/train.txt or splits/val.txt.
+        fold:
+            Which fold number to treat as the held-out fold.
+
+        role:
+            Either "train" or "val".
+            "val"   -> images whose fold == `fold`.
+            "train" -> all images whose fold != `fold`.
 
         transform:
             A Torchvision v2 transform applied jointly to the image
@@ -325,13 +333,16 @@ class LesionDataset(Dataset):
         include_task2:
             When False, only the Task 1 lesion mask is loaded.
             This avoids unnecessary disk access during Task 1 training.
+
+        fold_column:
+            Name of the fold column in task1_task2_folds.csv.
         """
-        if split not in {
+        if role not in {
             "train",
             "val",
         }:
             raise ValueError(
-                "split must be either 'train' or 'val'."
+                "role must be either 'train' or 'val'."
             )
 
         self.script_dir = os.path.dirname(
@@ -355,12 +366,14 @@ class LesionDataset(Dataset):
             "index.csv",
         )
 
-        self.split_path = os.path.join(
+        self.fold_csv_path = os.path.join(
             self.project_root,
             "splits",
-            f"{split}.txt",
+            "task1_task2_folds.csv",
         )
 
+        self.fold = fold
+        self.role = role
         self.transform = transform
         self.include_task2 = include_task2
 
@@ -373,29 +386,59 @@ class LesionDataset(Dataset):
             )
 
         if not os.path.exists(
-            self.split_path
+            self.fold_csv_path
         ):
             raise FileNotFoundError(
-                "Split file was not found: "
-                f"{self.split_path}"
+                "Fold assignment file was not found: "
+                f"{self.fold_csv_path}\n"
+                "Run the fold-creation step first."
             )
 
-        with open(
-            self.split_path,
-            mode="r",
-            encoding="utf-8",
-        ) as split_file:
-            self.valid_ids = {
-                line.strip()
-                for line in split_file
-                if line.strip()
-            }
+        # ----- select image IDs for this fold and role -----
+
+        folds = pd.read_csv(
+            self.fold_csv_path,
+            dtype={"image_id": str},
+        )
+
+        if fold_column not in folds.columns:
+            raise ValueError(
+                f"Column '{fold_column}' not found in "
+                f"{self.fold_csv_path}. "
+                f"Available columns: {list(folds.columns)}"
+            )
+
+        available_folds = sorted(
+            folds[fold_column].unique().tolist()
+        )
+
+        if fold not in available_folds:
+            raise ValueError(
+                f"Fold {fold} not present in the fold file. "
+                f"Available folds: {available_folds}"
+            )
+
+        if role == "val":
+            selected = folds[
+                folds[fold_column] == fold
+            ]
+        else:
+            selected = folds[
+                folds[fold_column] != fold
+            ]
+
+        self.valid_ids = {
+            str(image_id)
+            for image_id in selected["image_id"]
+        }
 
         if not self.valid_ids:
             raise ValueError(
-                f"The split file contains no image IDs: "
-                f"{self.split_path}"
+                f"No image IDs selected for fold={fold}, "
+                f"role='{role}'."
             )
+
+        # ----- join against index.csv for the file paths -----
 
         self.data = []
 
@@ -432,13 +475,14 @@ class LesionDataset(Dataset):
 
         if missing_ids:
             raise ValueError(
-                "Some split IDs were not found in index.csv. "
+                "Some fold IDs were not found in index.csv. "
                 f"Examples: {sorted(missing_ids)[:10]}"
             )
 
         if not self.data:
             raise ValueError(
-                f"No samples were loaded for split '{split}'."
+                f"No samples were loaded for fold={fold}, "
+                f"role='{role}'."
             )
 
     def __len__(self) -> int:
@@ -608,6 +652,7 @@ class LesionDataset(Dataset):
 
 if __name__ == "__main__":
     image_size = 384
+    dev_fold = 0
 
     train_transform = (
         build_train_transform(
@@ -622,18 +667,21 @@ if __name__ == "__main__":
     )
 
     print(
-        "Initializing datasets..."
+        "Initializing datasets "
+        f"(development fold = {dev_fold})..."
     )
 
     # Only Task 1 masks are needed for the current Task 1 baseline.
     train_dataset = LesionDataset(
-        split="train",
+        fold=dev_fold,
+        role="train",
         transform=train_transform,
         include_task2=False,
     )
 
     val_dataset = LesionDataset(
-        split="val",
+        fold=dev_fold,
+        role="val",
         transform=val_transform,
         include_task2=False,
     )
@@ -647,6 +695,28 @@ if __name__ == "__main__":
         f"Loaded {len(val_dataset)} "
         "validation samples."
     )
+
+    # Guard against any accidental overlap between train and val.
+    train_ids = {
+        row["image_id"]
+        for row in train_dataset.data
+    }
+    val_ids = {
+        row["image_id"]
+        for row in val_dataset.data
+    }
+    overlap = train_ids & val_ids
+
+    print(
+        f"Train/val overlap (must be 0): "
+        f"{len(overlap)}"
+    )
+
+    if overlap:
+        raise RuntimeError(
+            "Train and validation sets overlap: "
+            f"{sorted(overlap)[:10]}"
+        )
 
     sample = train_dataset[0]
 
