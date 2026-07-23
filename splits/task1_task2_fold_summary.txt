@@ -1,0 +1,101 @@
+TASK 1 + TASK 2 FOLD SUMMARY
+======================================================================
+Number of folds: 5
+Random seed: 42
+Development validation fold: 0
+Total samples: 2700
+Unique image groups: 2700
+Exact-duplicate image groups: 0
+
+Stratification labels:
+  - pigment_network_present
+  - negative_network_present
+  - streaks_present
+  - milia_like_cysts_present
+  - globules_present
+  - no_attribute_present
+  - multiple_attributes_present
+  - task1_area_bin_0
+  - task1_area_bin_1
+  - task1_area_bin_2
+  - task1_area_bin_3
+
+----------------------------------------------------------------------
+Fold 0
+----------------------------------------------------------------------
+Samples: 548 (20.30%)
+Unique image groups: 548
+Mean lesion area ratio: 0.224121
+Median lesion area ratio: 0.155758
+Images without positive Task 2 attributes: 103
+Images with multiple Task 2 attributes: 166
+Attribute prevalence:
+  pigment_network: 330 (60.22%)
+  negative_network: 40 (7.30%)
+  streaks: 29 (5.29%)
+  milia_like_cysts: 114 (20.80%)
+  globules: 122 (22.26%)
+
+----------------------------------------------------------------------
+Fold 1
+----------------------------------------------------------------------
+Samples: 540 (20.00%)
+Unique image groups: 540
+Mean lesion area ratio: 0.236143
+Median lesion area ratio: 0.157667
+Images without positive Task 2 attributes: 103
+Images with multiple Task 2 attributes: 166
+Attribute prevalence:
+  pigment_network: 330 (61.11%)
+  negative_network: 40 (7.41%)
+  streaks: 28 (5.19%)
+  milia_like_cysts: 115 (21.30%)
+  globules: 122 (22.59%)
+
+----------------------------------------------------------------------
+Fold 2
+----------------------------------------------------------------------
+Samples: 539 (19.96%)
+Unique image groups: 539
+Mean lesion area ratio: 0.232700
+Median lesion area ratio: 0.157927
+Images without positive Task 2 attributes: 104
+Images with multiple Task 2 attributes: 166
+Attribute prevalence:
+  pigment_network: 330 (61.22%)
+  negative_network: 40 (7.42%)
+  streaks: 28 (5.19%)
+  milia_like_cysts: 115 (21.34%)
+  globules: 122 (22.63%)
+
+----------------------------------------------------------------------
+Fold 3
+----------------------------------------------------------------------
+Samples: 535 (19.81%)
+Unique image groups: 535
+Mean lesion area ratio: 0.231120
+Median lesion area ratio: 0.163563
+Images without positive Task 2 attributes: 104
+Images with multiple Task 2 attributes: 166
+Attribute prevalence:
+  pigment_network: 331 (61.87%)
+  negative_network: 41 (7.66%)
+  streaks: 28 (5.23%)
+  milia_like_cysts: 115 (21.50%)
+  globules: 122 (22.80%)
+
+----------------------------------------------------------------------
+Fold 4
+----------------------------------------------------------------------
+Samples: 538 (19.93%)
+Unique image groups: 538
+Mean lesion area ratio: 0.226533
+Median lesion area ratio: 0.158396
+Images without positive Task 2 attributes: 103
+Images with multiple Task 2 attributes: 167
+Attribute prevalence:
+  pigment_network: 330 (61.34%)
+  negative_network: 40 (7.43%)
+  streaks: 29 (5.39%)
+  milia_like_cysts: 115 (21.38%)
+  globules: 122 (22.68%)

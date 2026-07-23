@@ -1,0 +1,41 @@
+{
+  "created_at_utc": "2026-07-23T15:32:33.222358+00:00",
+  "index_csv": "D:\\Biology-AI\\index.csv",
+  "fold_output_csv": "D:\\Biology-AI\\splits\\task1_task2_folds.csv",
+  "number_of_folds": 5,
+  "development_validation_fold": 0,
+  "random_seed": 42,
+  "splitter": "MultilabelStratifiedKFold",
+  "duplicate_handling": "Task 1 images with identical SHA-256 hashes are assigned to the same fold.",
+  "total_samples": 2700,
+  "unique_image_groups": 2700,
+  "attribute_names": [
+    "pigment_network",
+    "negative_network",
+    "streaks",
+    "milia_like_cysts",
+    "globules"
+  ],
+  "stratification_targets": [
+    "pigment_network_present",
+    "negative_network_present",
+    "streaks_present",
+    "milia_like_cysts_present",
+    "globules_present",
+    "no_attribute_present",
+    "multiple_attributes_present",
+    "task1_area_bin_0",
+    "task1_area_bin_1",
+    "task1_area_bin_2",
+    "task1_area_bin_3"
+  ],
+  "development_train_count": 2152,
+  "development_validation_count": 548,
+  "output_files": {
+    "fold_assignments": "D:\\Biology-AI\\splits\\task1_task2_folds.csv",
+    "fold_summary_csv": "D:\\Biology-AI\\splits\\task1_task2_fold_summary.csv",
+    "fold_summary_txt": "D:\\Biology-AI\\splits\\task1_task2_fold_summary.txt",
+    "train_ids": "D:\\Biology-AI\\splits\\train.txt",
+    "validation_ids": "D:\\Biology-AI\\splits\\val.txt"
+  }
+}
