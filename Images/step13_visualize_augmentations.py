@@ -183,6 +183,7 @@ def show_augmentations(
 
 if __name__ == "__main__":
     image_size = 384
+    dev_fold = 0
 
     train_transform = (
         build_train_transform(
@@ -191,11 +192,14 @@ if __name__ == "__main__":
     )
 
     print(
-        "Loading the training dataset..."
+        "Loading the training dataset "
+        f"(development fold = {dev_fold})..."
     )
 
+    # include_task2=True so all six masks are available to display.
     dataset = LesionDataset(
-        split="train",
+        fold=dev_fold,
+        role="train",
         transform=train_transform,
         include_task2=True,
     )
