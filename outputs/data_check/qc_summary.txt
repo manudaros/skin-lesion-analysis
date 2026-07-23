@@ -1,0 +1,53 @@
+DATASET QUALITY-CONTROL SUMMARY
+======================================================================
+
+INDEX VALIDATION
+Report available: True
+Index issues: 0
+
+ORIGINAL IMAGE READABILITY
+Report available: True
+Images inspected: 5400
+Unreadable images: 0
+Non-RGB images: 0
+All-black images: 0
+All-white images: 0
+Near-uniform images: 0
+
+DIMENSIONS
+Report available: True
+Image-mask pairs inspected: 16200
+Dimension mismatches: 0
+Missing images: 0
+Missing masks: 0
+
+TASK 1 MASK QUALITY
+Report available: True
+Task 1 masks inspected: 2700
+Unreadable Task 1 masks: 0
+Non-binary Task 1 masks: 0
+Empty lesion masks: 0
+Full lesion masks: 1
+Very small lesions: 7
+Very large lesions: 16
+
+TASK 2 MASK QUALITY
+Report available: True
+Task 2 mask rows inspected: 13500
+Missing attribute masks: 0
+Unreadable attribute masks: 0
+Non-binary attribute masks: 0
+Full attribute masks: 0
+Lesion-attribute size mismatches: 0
+Outside-lesion warnings: 725
+
+DUPLICATES
+Duplicate ID report available: True
+Duplicate ID groups: 0
+Exact duplicate Task 1 image groups: 0
+Different Task 1 and Task 2 image copies: 0
+
+INTERPRETATION NOTES
+- Empty Task 2 masks are expected when an attribute is absent.
+- A small number of attribute pixels outside the lesion may reflect annotation-boundary differences.
+- The two overlay scripts must still be reviewed manually.
