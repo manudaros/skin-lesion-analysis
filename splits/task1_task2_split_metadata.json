@@ -1,0 +1,22 @@
+{
+  "n_images": 2700,
+  "n_folds": 5,
+  "random_seed": 42,
+  "development_validation_fold": 0,
+  "method": "MultilabelStratifiedKFold",
+  "stratified_on": [
+    "pigment_network_present",
+    "negative_network_present",
+    "streaks_present",
+    "milia_like_cysts_present",
+    "globules_present",
+    "very_small_lesion",
+    "very_large_lesion",
+    "touches_image_border",
+    "area_0",
+    "area_1",
+    "area_2",
+    "area_3",
+    "area_4"
+  ]
+}
