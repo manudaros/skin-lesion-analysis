@@ -1,0 +1,226 @@
+"""
+Figure 3.4 (optional) - Lesion area distribution and stratification bins.
+
+Not included in the 4-page chapter, but useful for an appendix or for
+Chapter 4, where per-image Dice is likely to correlate with lesion size.
+
+Input : splits/task1_task2_folds.csv            (written by step11), or
+        outputs/data_check/task1_mask_quality.csv  (written by step05)
+Output: outputs/figures/fig_lesion_area.{pdf,png}
+
+Standalone: requires only pandas, numpy and matplotlib.
+
+    python fig04_lesion_area.py
+    python fig04_lesion_area.py --data-dir path/to/reports
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")  # write files; never open a blocking window
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# ------------------------------------------------------------------
+# Self-contained helpers. This script has no local imports on purpose,
+# so it runs from any directory and can be copied around on its own.
+# ------------------------------------------------------------------
+
+PALETTE = {
+    "primary": "#4a7ba7",
+    "secondary": "#a7714a",
+    "accent": "#6a8f5f",
+    "muted": "#8c8c8c",
+    "grid": "#d9d9d9",
+}
+
+
+def apply_style() -> None:
+    plt.rcParams.update(
+        {
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "font.size": 8,
+            "axes.titlesize": 9,
+            "axes.labelsize": 8,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.color": PALETTE["grid"],
+            "grid.linewidth": 0.5,
+            "legend.frameon": False,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+        }
+    )
+
+
+def build_parser(description: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Directory holding the CSV reports. Defaults to searching "
+        "the standard project locations.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Where to write the figure. Defaults to outputs/figures/.",
+    )
+    return parser
+
+
+def script_dir() -> Path:
+    """This script's own directory, falling back to cwd in notebooks."""
+    try:
+        return Path(__file__).resolve().parent
+    except NameError:
+        return Path.cwd().resolve()
+
+
+def project_root() -> Path:
+    """Walk upwards until a directory containing outputs/ or data/ is found."""
+    here = script_dir()
+    for candidate in [here, *here.parents]:
+        if (candidate / "outputs").is_dir() or (candidate / "data").is_dir():
+            return candidate
+    return here
+
+
+def find_report(filename: str, data_dir: Path | None = None) -> Path:
+    if data_dir is not None:
+        candidate = data_dir / filename
+        if candidate.exists():
+            return candidate
+        raise SystemExit(f"ERROR: {filename} not found in {data_dir}")
+
+    root = project_root()
+    search_paths = [
+        root / "outputs" / "data_check" / filename,
+        root / "splits" / filename,
+        root / filename,
+        script_dir() / filename,
+        Path.cwd() / filename,
+    ]
+    for candidate in search_paths:
+        if candidate.exists():
+            return candidate
+
+    searched = "\n  ".join(str(path) for path in search_paths)
+    raise SystemExit(
+        f"ERROR: could not find {filename}. Looked in:\n  {searched}\n"
+        "Pass --data-dir to point at the reports directly, e.g.\n"
+        "  python fig04_lesion_area.py --data-dir path/to/reports"
+    )
+
+
+def resolve_output_dir(output_dir: Path | None) -> Path:
+    target = output_dir or (project_root() / "outputs" / "figures")
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def save(figure, output_dir: Path, stem: str) -> None:
+    """Write both a PDF (for LaTeX) and a PNG (for quick viewing)."""
+    for suffix in ("pdf", "png"):
+        path = output_dir / f"{stem}.{suffix}"
+        figure.savefig(path)
+        print(f"  wrote {path}")
+    plt.close(figure)
+
+
+SMALL_LESION_THRESHOLD = 0.005
+LARGE_LESION_THRESHOLD = 0.95
+
+
+def load_area_ratios(data_dir) -> pd.Series:
+    """Prefer the fold file (it already carries the bins); fall back to QC."""
+    root = project_root()
+    for candidate in (root / "splits" / "task1_task2_folds.csv",
+                      (data_dir / "task1_task2_folds.csv")
+                      if data_dir else None):
+        if candidate is not None and candidate.exists():
+            frame = pd.read_csv(candidate)
+            if "task1_lesion_area_ratio" in frame.columns:
+                print(f"Loaded {len(frame)} rows from {candidate.name}")
+                return frame["task1_lesion_area_ratio"].astype(float)
+
+    report = find_report("task1_mask_quality.csv", data_dir)
+    frame = pd.read_csv(report)
+    print(f"Loaded {len(frame)} rows from {report.name}")
+    return frame["foreground_ratio"].astype(float)
+
+
+def main() -> None:
+    args = build_parser("Figure 3.4 - lesion area").parse_args()
+    apply_style()
+
+    area = load_area_ratios(args.data_dir).dropna()
+
+    figure, axes = plt.subplots(1, 2, figsize=(6.6, 2.4))
+
+    # ---- Panel A: distribution with quartile boundaries ------------
+    axis = axes[0]
+    axis.hist(area, bins=60, color=PALETTE["primary"], edgecolor="white",
+              linewidth=0.3)
+
+    # The bins are quartiles of the ranked area, matching step11.
+    edges = [area.quantile(q) for q in (0.25, 0.50, 0.75)]
+    for index, edge in enumerate(edges):
+        axis.axvline(edge, color="black", linewidth=0.9, linestyle="--",
+                     label="Quartile bin edges" if index == 0 else None)
+
+    axis.set_xlabel("Lesion area / image area")
+    axis.set_ylabel("Number of images")
+    axis.set_title("(a) Distribution and stratification bins")
+    axis.legend(loc="upper right")
+
+    # ---- Panel B: log scale with QC thresholds ---------------------
+    axis = axes[1]
+    positive = area[area > 0]
+    axis.hist(
+        positive,
+        bins=np.logspace(np.log10(positive.min()),
+                         np.log10(positive.max()), 60),
+        color=PALETTE["accent"], edgecolor="white", linewidth=0.3,
+    )
+    axis.set_xscale("log")
+    axis.axvline(SMALL_LESION_THRESHOLD, color=PALETTE["secondary"],
+                 linewidth=1.0, label=f"very small (<{SMALL_LESION_THRESHOLD})")
+    axis.axvline(LARGE_LESION_THRESHOLD, color=PALETTE["secondary"],
+                 linewidth=1.0, linestyle="--",
+                 label=f"very large (>{LARGE_LESION_THRESHOLD})")
+    axis.set_xlabel("Lesion area / image area (log scale)")
+    axis.set_ylabel("Number of images")
+    axis.set_title("(b) QC thresholds")
+    axis.legend(loc="upper left")
+
+    figure.tight_layout()
+    save(figure, resolve_output_dir(args.output_dir), "fig_lesion_area")
+
+    # ---- Numbers quoted in the text --------------------------------
+    print("\nValues cited in Section 3.3:")
+    print(f"  n                    : {len(area)}")
+    print(f"  mean / median        : {area.mean():.4f} / {area.median():.4f}")
+    print(f"  p05 / p95            : {area.quantile(0.05):.4f} / "
+          f"{area.quantile(0.95):.4f}")
+    print("  quartile bin edges   : "
+          + ", ".join(f"{edge:.4f}" for edge in edges))
+    print(f"  very small (<{SMALL_LESION_THRESHOLD}) : "
+          f"{(area < SMALL_LESION_THRESHOLD).sum()}")
+    print(f"  very large (>{LARGE_LESION_THRESHOLD})  : "
+          f"{(area > LARGE_LESION_THRESHOLD).sum()}")
+
+
+if __name__ == "__main__":
+    main()

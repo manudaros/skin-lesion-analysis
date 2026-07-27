@@ -1,0 +1,247 @@
+"""
+Figure 3.3 - Stratification quality of the five-fold split.
+
+Shows that per-fold attribute prevalence and mean lesion area stay close
+to the dataset-level values, including for the rarest attributes.
+
+Input : splits/task1_task2_fold_summary.csv   (written by step11)
+Output: outputs/figures/fig_fold_balance.{pdf,png}
+
+Standalone: requires only pandas, numpy and matplotlib.
+
+    python fig03_fold_balance.py
+    python fig03_fold_balance.py --data-dir path/to/splits
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")  # write files; never open a blocking window
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# ------------------------------------------------------------------
+# Self-contained helpers. This script has no local imports on purpose,
+# so it runs from any directory and can be copied around on its own.
+# ------------------------------------------------------------------
+
+PALETTE = {
+    "primary": "#4a7ba7",
+    "secondary": "#a7714a",
+    "accent": "#6a8f5f",
+    "muted": "#8c8c8c",
+    "grid": "#d9d9d9",
+}
+
+ATTRIBUTES = [
+    "pigment_network",
+    "negative_network",
+    "streaks",
+    "milia_like_cysts",
+    "globules",
+]
+
+ATTRIBUTE_LABELS = {
+    "pigment_network": "Pigment\nnetwork",
+    "negative_network": "Negative\nnetwork",
+    "streaks": "Streaks",
+    "milia_like_cysts": "Milia-like\ncysts",
+    "globules": "Globules",
+}
+
+
+def apply_style() -> None:
+    plt.rcParams.update(
+        {
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "font.size": 8,
+            "axes.titlesize": 9,
+            "axes.labelsize": 8,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.color": PALETTE["grid"],
+            "grid.linewidth": 0.5,
+            "legend.frameon": False,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+        }
+    )
+
+
+def build_parser(description: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Directory holding the CSV reports. Defaults to searching "
+        "the standard project locations.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Where to write the figure. Defaults to outputs/figures/.",
+    )
+    return parser
+
+
+def script_dir() -> Path:
+    """This script's own directory, falling back to cwd in notebooks."""
+    try:
+        return Path(__file__).resolve().parent
+    except NameError:
+        return Path.cwd().resolve()
+
+
+def project_root() -> Path:
+    """Walk upwards until a directory containing outputs/ or data/ is found."""
+    here = script_dir()
+    for candidate in [here, *here.parents]:
+        if (candidate / "outputs").is_dir() or (candidate / "data").is_dir():
+            return candidate
+    return here
+
+
+def find_report(filename: str, data_dir: Path | None = None) -> Path:
+    if data_dir is not None:
+        candidate = data_dir / filename
+        if candidate.exists():
+            return candidate
+        raise SystemExit(f"ERROR: {filename} not found in {data_dir}")
+
+    root = project_root()
+    search_paths = [
+        root / "outputs" / "data_check" / filename,
+        root / "splits" / filename,
+        root / filename,
+        script_dir() / filename,
+        Path.cwd() / filename,
+    ]
+    for candidate in search_paths:
+        if candidate.exists():
+            return candidate
+
+    searched = "\n  ".join(str(path) for path in search_paths)
+    raise SystemExit(
+        f"ERROR: could not find {filename}. Looked in:\n  {searched}\n"
+        "Pass --data-dir to point at the reports directly, e.g.\n"
+        "  python fig03_fold_balance.py --data-dir path/to/reports"
+    )
+
+
+def resolve_output_dir(output_dir: Path | None) -> Path:
+    target = output_dir or (project_root() / "outputs" / "figures")
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def save(figure, output_dir: Path, stem: str) -> None:
+    """Write both a PDF (for LaTeX) and a PNG (for quick viewing)."""
+    for suffix in ("pdf", "png"):
+        path = output_dir / f"{stem}.{suffix}"
+        figure.savefig(path)
+        print(f"  wrote {path}")
+    plt.close(figure)
+
+
+FOLD_COLOURS = ["#4a7ba7", "#6a8f5f", "#a7714a", "#8c6a9e", "#b0a04a"]
+
+
+def main() -> None:
+    args = build_parser("Figure 3.3 - fold balance").parse_args()
+    apply_style()
+
+    report = find_report("task1_task2_fold_summary.csv", args.data_dir)
+    summary = pd.read_csv(report).sort_values("fold")
+    print(f"Loaded {len(summary)} folds from {report.name}")
+
+    total = summary["sample_count"].sum()
+
+    figure, axes = plt.subplots(1, 2, figsize=(6.6, 2.4))
+
+    # ---- Panel A: attribute prevalence by fold ---------------------
+    axis = axes[0]
+    group_positions = np.arange(len(ATTRIBUTES))
+    bar_width = 0.16
+
+    for offset, (_, row) in enumerate(summary.iterrows()):
+        prevalences = [100.0 * row[f"{name}_prevalence"] for name in ATTRIBUTES]
+        axis.bar(group_positions + (offset - 2) * bar_width, prevalences,
+                 width=bar_width, color=FOLD_COLOURS[offset],
+                 label=f"Fold {int(row['fold'])}")
+
+    # Dataset-level prevalence as a reference line per attribute.
+    for index, name in enumerate(ATTRIBUTES):
+        overall = 100.0 * summary[f"{name}_positive_count"].sum() / total
+        axis.hlines(overall, index - 2.7 * bar_width, index + 2.7 * bar_width,
+                    color="black", linewidth=0.9, linestyle="--", zorder=5)
+
+    axis.set_xticks(group_positions)
+    axis.set_xticklabels([ATTRIBUTE_LABELS[n] for n in ATTRIBUTES], fontsize=6.2)
+    axis.set_ylabel("Prevalence within fold (%)")
+    axis.set_title("(a) Attribute prevalence by fold")
+    axis.legend(ncol=5, loc="upper center", fontsize=6, columnspacing=0.8)
+    axis.set_ylim(0, 78)
+
+    # ---- Panel B: fold size and mean lesion area -------------------
+    axis = axes[1]
+    folds = summary["fold"].astype(int).to_numpy()
+
+    axis.bar(folds, summary["sample_count"],
+             color=[FOLD_COLOURS[i] for i in range(len(folds))], width=0.62)
+    for fold, count in zip(folds, summary["sample_count"]):
+        axis.text(fold, count + 6, str(int(count)), ha="center",
+                  va="bottom", fontsize=6.5)
+
+    axis.set_xticks(folds)
+    axis.set_xlabel("Fold")
+    axis.set_ylabel("Images")
+    axis.set_ylim(0, summary["sample_count"].max() * 1.16)
+    axis.set_title("(b) Fold size and mean lesion area")
+
+    twin = axis.twinx()
+    twin.plot(folds, summary["mean_task1_lesion_area_ratio"], color="black",
+              marker="o", markersize=3.5, linewidth=1.0,
+              label="Mean lesion area ratio")
+    overall_area = (summary["mean_task1_lesion_area_ratio"]
+                    * summary["sample_count"]).sum() / total
+    twin.axhline(overall_area, color=PALETTE["muted"], linewidth=0.8,
+                 linestyle=":")
+    twin.set_ylabel("Mean lesion area ratio")
+    twin.set_ylim(0.18, 0.28)
+    twin.grid(False)
+    twin.legend(loc="lower right", fontsize=6)
+
+    figure.tight_layout()
+    save(figure, resolve_output_dir(args.output_dir), "fig_fold_balance")
+
+    # ---- Numbers quoted in the text --------------------------------
+    print("\nValues cited in Section 3.4:")
+    print(f"  fold sizes : "
+          f"{', '.join(str(int(v)) for v in summary['sample_count'])}")
+    validation = int(summary.loc[summary["fold"] == 0, "sample_count"].iloc[0])
+    print(f"  development split : {total - validation} train / {validation} val")
+    for name in ATTRIBUTES:
+        low = 100 * summary[f"{name}_prevalence"].min()
+        high = 100 * summary[f"{name}_prevalence"].max()
+        overall = 100 * summary[f"{name}_positive_count"].sum() / total
+        print(f"  {name:18} fold range {low:5.2f}-{high:5.2f}%  "
+              f"(dataset {overall:5.2f}%)")
+    print(f"  mean lesion area range : "
+          f"{summary['mean_task1_lesion_area_ratio'].min():.4f}-"
+          f"{summary['mean_task1_lesion_area_ratio'].max():.4f} "
+          f"(dataset {overall_area:.4f})")
+
+
+if __name__ == "__main__":
+    main()

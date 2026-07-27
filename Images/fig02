@@ -1,0 +1,262 @@
+"""
+Figure 3.2 - Task 2 attribute prevalence, sparsity and co-occurrence.
+
+Motivates both the multi-label stratified split and the overlap-based
+segmentation loss: prevalence spans an order of magnitude, and positive
+masks cover only a few percent of the image.
+
+Input : outputs/data_check/task2_mask_quality.csv   (written by step05)
+Output: outputs/figures/fig_attribute_prevalence.{pdf,png}
+
+Standalone: requires only pandas, numpy and matplotlib.
+
+    python fig02_attribute_prevalence.py
+    python fig02_attribute_prevalence.py --data-dir path/to/reports
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")  # write files; never open a blocking window
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# ------------------------------------------------------------------
+# Self-contained helpers. This script has no local imports on purpose,
+# so it runs from any directory and can be copied around on its own.
+# ------------------------------------------------------------------
+
+PALETTE = {
+    "primary": "#4a7ba7",
+    "secondary": "#a7714a",
+    "accent": "#6a8f5f",
+    "muted": "#8c8c8c",
+    "grid": "#d9d9d9",
+}
+
+ATTRIBUTES = [
+    "pigment_network",
+    "negative_network",
+    "streaks",
+    "milia_like_cysts",
+    "globules",
+]
+
+ATTRIBUTE_LABELS = {
+    "pigment_network": "Pigment\nnetwork",
+    "negative_network": "Negative\nnetwork",
+    "streaks": "Streaks",
+    "milia_like_cysts": "Milia-like\ncysts",
+    "globules": "Globules",
+}
+
+
+def apply_style() -> None:
+    plt.rcParams.update(
+        {
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "font.size": 8,
+            "axes.titlesize": 9,
+            "axes.labelsize": 8,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.color": PALETTE["grid"],
+            "grid.linewidth": 0.5,
+            "legend.frameon": False,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+        }
+    )
+
+
+def build_parser(description: str) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Directory holding the CSV reports. Defaults to searching "
+        "the standard project locations.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Where to write the figure. Defaults to outputs/figures/.",
+    )
+    return parser
+
+
+def script_dir() -> Path:
+    """This script's own directory, falling back to cwd in notebooks."""
+    try:
+        return Path(__file__).resolve().parent
+    except NameError:
+        return Path.cwd().resolve()
+
+
+def project_root() -> Path:
+    """Walk upwards until a directory containing outputs/ or data/ is found."""
+    here = script_dir()
+    for candidate in [here, *here.parents]:
+        if (candidate / "outputs").is_dir() or (candidate / "data").is_dir():
+            return candidate
+    return here
+
+
+def find_report(filename: str, data_dir: Path | None = None) -> Path:
+    if data_dir is not None:
+        candidate = data_dir / filename
+        if candidate.exists():
+            return candidate
+        raise SystemExit(f"ERROR: {filename} not found in {data_dir}")
+
+    root = project_root()
+    search_paths = [
+        root / "outputs" / "data_check" / filename,
+        root / "splits" / filename,
+        root / filename,
+        script_dir() / filename,
+        Path.cwd() / filename,
+    ]
+    for candidate in search_paths:
+        if candidate.exists():
+            return candidate
+
+    searched = "\n  ".join(str(path) for path in search_paths)
+    raise SystemExit(
+        f"ERROR: could not find {filename}. Looked in:\n  {searched}\n"
+        "Pass --data-dir to point at the reports directly, e.g.\n"
+        "  python fig02_attribute_prevalence.py --data-dir path/to/reports"
+    )
+
+
+def resolve_output_dir(output_dir: Path | None) -> Path:
+    target = output_dir or (project_root() / "outputs" / "figures")
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def save(figure, output_dir: Path, stem: str) -> None:
+    """Write both a PDF (for LaTeX) and a PNG (for quick viewing)."""
+    for suffix in ("pdf", "png"):
+        path = output_dir / f"{stem}.{suffix}"
+        figure.savefig(path)
+        print(f"  wrote {path}")
+    plt.close(figure)
+
+
+def main() -> None:
+    args = build_parser("Figure 3.2 - attribute prevalence").parse_args()
+    apply_style()
+
+    report = find_report("task2_mask_quality.csv", args.data_dir)
+    frame = pd.read_csv(report)
+    frame["is_positive"] = ~frame["empty_mask"].astype(bool)
+
+    image_count = frame["image_id"].nunique()
+    print(f"Loaded {len(frame)} attribute masks over {image_count} images")
+
+    figure, axes = plt.subplots(1, 3, figsize=(6.9, 2.4))
+    positions = np.arange(len(ATTRIBUTES))
+
+    # ---- Panel A: prevalence ---------------------------------------
+    axis = axes[0]
+    counts = [int(frame.loc[frame["attribute"] == name, "is_positive"].sum())
+              for name in ATTRIBUTES]
+    rates = [100.0 * value / image_count for value in counts]
+
+    bars = axis.bar(positions, rates, color=PALETTE["primary"], width=0.68)
+    for bar, count in zip(bars, counts):
+        axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2,
+                  str(count), ha="center", va="bottom", fontsize=6.5)
+
+    axis.set_xticks(positions)
+    axis.set_xticklabels([ATTRIBUTE_LABELS[n] for n in ATTRIBUTES], fontsize=6.2)
+    axis.set_ylabel("Images positive (%)")
+    axis.set_ylim(0, 72)
+    axis.set_title("(a) Prevalence")
+
+    # ---- Panel B: foreground area among positive masks -------------
+    axis = axes[1]
+    data = [frame.loc[(frame["attribute"] == name) & frame["is_positive"],
+                      "foreground_ratio"].to_numpy() for name in ATTRIBUTES]
+
+    box = axis.boxplot(data, positions=positions, widths=0.55,
+                       showfliers=False, patch_artist=True,
+                       medianprops={"color": "black", "linewidth": 1.0})
+    for patch in box["boxes"]:
+        patch.set_facecolor(PALETTE["accent"])
+        patch.set_alpha(0.75)
+        patch.set_edgecolor("black")
+        patch.set_linewidth(0.6)
+    for element in ("whiskers", "caps"):
+        for line in box[element]:
+            line.set_linewidth(0.6)
+
+    axis.set_yscale("log")
+    axis.set_xticks(positions)
+    axis.set_xticklabels([ATTRIBUTE_LABELS[n] for n in ATTRIBUTES], fontsize=6.2)
+    axis.set_ylabel("Foreground / image area")
+    axis.set_title("(b) Sparsity (positive masks)")
+
+    # ---- Panel C: attributes present per image ---------------------
+    axis = axes[2]
+    per_image = (
+        frame.pivot_table(index="image_id", columns="attribute",
+                          values="is_positive", aggfunc="first")
+        .sum(axis=1).astype(int)
+    )
+    distribution = per_image.value_counts().sort_index().reindex(
+        range(6), fill_value=0)
+
+    bars = axis.bar(distribution.index, distribution.to_numpy(),
+                    color=PALETTE["secondary"], width=0.68)
+    for bar, value in zip(bars, distribution.to_numpy()):
+        if value > 0:
+            axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 22,
+                      str(value), ha="center", va="bottom", fontsize=6.5)
+
+    axis.set_xlabel("Attributes present")
+    axis.set_ylabel("Number of images")
+    axis.set_ylim(0, distribution.max() * 1.18)
+    axis.set_title("(c) Co-occurrence")
+
+    figure.tight_layout()
+    save(figure, resolve_output_dir(args.output_dir), "fig_attribute_prevalence")
+
+    # ---- Numbers quoted in the text --------------------------------
+    print("\nValues cited in Section 3.3 and Table 3.2:")
+    for name in ATTRIBUTES:
+        subset = frame[frame["attribute"] == name]
+        positive = subset[subset["is_positive"]]
+        outside = subset["status"].str.contains(
+            "attribute_outside_lesion", na=False).sum()
+        print(f"  {name:18} n={len(positive):5d} "
+              f"({100 * len(positive) / image_count:5.2f}%)  "
+              f"mean={positive['foreground_ratio'].mean():.4f}  "
+              f"median={positive['foreground_ratio'].median():.4f}  "
+              f"p95={positive['foreground_ratio'].quantile(0.95):.4f}  "
+              f"outside-lesion={outside}")
+
+    print(f"\n  positive masks overall : {int(frame['is_positive'].sum())} "
+          f"of {len(frame)} ({100 * frame['is_positive'].mean():.1f}%)")
+    print(f"  images with >= 2 attributes : {(per_image >= 2).sum()}")
+    print(f"  images with no attribute    : {(per_image == 0).sum()}")
+
+    flagged = frame[frame["status"].str.contains("outside", na=False)]
+    print(f"  outside-lesion warnings : {len(flagged)}; median outside "
+          f"fraction {flagged['outside_lesion_fraction'].median():.4f}")
+
+
+if __name__ == "__main__":
+    main()
