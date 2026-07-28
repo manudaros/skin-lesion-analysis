@@ -178,11 +178,11 @@ def main() -> None:
     edges = [area.quantile(q) for q in (0.25, 0.50, 0.75)]
     for index, edge in enumerate(edges):
         axis.axvline(edge, color="black", linewidth=0.9, linestyle="--",
-                     label="Quartile bin edges" if index == 0 else None)
+                     label="split boundaries" if index == 0 else None)
 
-    axis.set_xlabel("Lesion area / image area")
+    axis.set_xlabel("Lesion area as a fraction of the image")
     axis.set_ylabel("Number of images")
-    axis.set_title("(a) Distribution and stratification bins")
+    axis.set_title("(a) Distribution and equal-size groups")
     axis.legend(loc="upper right")
 
     # ---- Panel B: log scale with QC thresholds ---------------------
@@ -196,13 +196,12 @@ def main() -> None:
     )
     axis.set_xscale("log")
     axis.axvline(SMALL_LESION_THRESHOLD, color=PALETTE["secondary"],
-                 linewidth=1.0, label=f"very small (<{SMALL_LESION_THRESHOLD})")
+                 linewidth=1.1, label="very small (<0.5%)")
     axis.axvline(LARGE_LESION_THRESHOLD, color=PALETTE["secondary"],
-                 linewidth=1.0, linestyle="--",
-                 label=f"very large (>{LARGE_LESION_THRESHOLD})")
-    axis.set_xlabel("Lesion area / image area (log scale)")
+                 linewidth=1.1, linestyle="--", label="very large (>95%)")
+    axis.set_xlabel("Lesion area, log scale")
     axis.set_ylabel("Number of images")
-    axis.set_title("(b) QC thresholds")
+    axis.set_title("(b) Retained extreme cases")
     axis.legend(loc="upper left")
 
     figure.tight_layout()
